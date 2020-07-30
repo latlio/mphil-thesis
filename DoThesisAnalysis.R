@@ -8,6 +8,7 @@ library(naniar)
 library(patchwork)
 library(corrr)
 library(cmprsk)
+library(scales)
 
 data_path <- "/Users/lathanliou/Desktop/Academic/Cambridge/Thesis/Data/FinalDataPrep"
 setwd(data_path)
@@ -304,7 +305,7 @@ PerformMissignessAnalysis <- function(data) {
   return(plot_list)
 }
 
-PlotACMKMCurves <- function(data, var, label) {
+PlotACMKMCurves <- function(data, var, label, subgroup_labels) {
   #all-cause mortality
   #YearsToStatus-YearsToEntry
   surv_formula <- paste0("Surv(YearsToStatus, VitalStatus) ~ ", var) %>%
@@ -318,10 +319,13 @@ PlotACMKMCurves <- function(data, var, label) {
                                        censor = FALSE,
                                        legend = "right",
                                        legend.title = paste0(label),
+                                       legend.labs = subgroup_labels,
                                        risk.table = TRUE,
-                                       xlim = c(0,20))
+                                       xlim = c(0,20),
+                                       ylim = c(0.5,1),
+                                       break.time.by = 5)
   
-  ggsave(paste0(analysis_output_path, "/", var, "-crude-ACM-curves.png"), 
+  ggsave(paste0(analysis_output_path_KM, "/", var, "-crude-ACM-curves.png"), 
          print(unadjcurves), device = "png", width = 8, height = 7)
 }
 
@@ -535,6 +539,8 @@ AssessQuintileDoseResponse <- function(data, quintilevar, var, label, width) {
            mean = meanquintiles %>% pull()) %>%
     ggplot(aes(x = mean, y = estimate, col = as.factor(Quintile))) + 
     geom_point() +
+    scale_y_continuous(trans = log_trans(),
+                       labels = scales::number_format(accuracy = 1)) +
     geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
                   width = width) + 
     theme_bw() + 
@@ -578,6 +584,8 @@ AssessControlDoseResponse <- function(data, outcome, modelterms, quintilevar,
              mean = meanquintiles %>% pull()) %>%
       ggplot(aes(x = mean, y = estimate, col = as.factor(Quintile))) + 
       geom_point() +
+      scale_y_continuous(trans = log_trans(),
+                         labels = scales::number_format(accuracy = 0.1)) +
       geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
                     width = width) + 
       theme_bw() + 
@@ -607,6 +615,8 @@ AssessControlDoseResponse <- function(data, outcome, modelterms, quintilevar,
              mean = meanquintiles %>% pull()) %>%
       ggplot(aes(x = mean, y = estimate, col = as.factor(Quintile))) + 
       geom_point() +
+      scale_y_continuous(trans = log_trans(),
+                         labels = scales::number_format(accuracy = 0.1)) +
       geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
                     width = width) + 
       theme_bw() + 
@@ -1683,13 +1693,17 @@ DoAllAnalysis <- function(use_existing_data = T) {
     (missingplot_list[[8]] + patchwork::plot_spacer())
   
   # Plot Crude all-cause mortality curves 
-  # ACM_vars <- c("Chemotherapy",
-  #               "Radiotherapy",
-  #               "HormoneTherapy")
-  # ACM_var_labels <- c("Chemotherapy",
-  #                     "Radiotherapy",
-  #                     "Hormone Therapy")
-  # map2(ACM_vars, ACM_var_labels, PlotACMKMCurves, data = data_quintiles)
+  ACM_vars <- c("Chemotherapy",
+                "Radiotherapy",
+                "HormoneTherapy")
+  ACM_var_labels <- c("Chemotherapy",
+                      "Radiotherapy",
+                      "Hormone Therapy")
+  ACM_var_sublabels <- list(chemo = c("Did not receive", "Received"),
+                           radio = c("Did not receive", "Received"),
+                           horm = c("Did not receive", "Received"))
+  ACM_list <- list(ACM_vars, ACM_var_labels, ACM_var_sublabels)
+  pmap(ACM_list, PlotACMKMCurves, data = data_quintiles)
   # 
   # Plot Undjusted KM Curves
   KM_vars <- c("Chemotherapy",
@@ -1763,7 +1777,8 @@ DoAllAnalysis <- function(use_existing_data = T) {
                   "AlcNow",
                   "Parity",
                   "HRTEver")
-  unimodel <- univariate %>% map_dfr(PerformUnivariateModelling, data = data_quintiles)
+  unimodel <- univariate %>% map_dfr(PerformUnivariateModelling, 
+                                     data = data_quintiles)
   
   # Plot control dose response
   control_list <- list(
@@ -1778,7 +1793,7 @@ DoAllAnalysis <- function(use_existing_data = T) {
                                              data = data_quintiles)
   allcause_plot <- allcausedose_list[[1]] / allcausedose_list[[2]] /
     allcausedose_list[[3]]
-  ggsave(paste0(analysis_output_path_KM, "/", "dose-response-acm.png"), 
+  ggsave(paste0(analysis_output_path_exploratory, "/dose-response-acm.png"), 
          allcause_plot, device = "png", width = 7, height = 10)
   
   # Perform Sequential Modelling
