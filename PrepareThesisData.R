@@ -359,6 +359,39 @@ MakeFinalDataset <- function() {
     )) %>%
     dplyr::select(-starts_with("I2"), -starts_with("hes"))
   
+  #further clean
+  final_thesis_data <- final_thesis_data %>% 
+    replace_na(., list(Radiotherapy = 0,
+                     Chemotherapy = 0,
+                     HormoneTherapy = 0)) %>%
+    mutate(prs_z_quintile = cut(prs_z, quantile(prs_z, 
+                                                probs = 0:5/5,
+                                                na.rm = TRUE),
+                                include.lowest = TRUE),
+           bmi_z = (BMI - mean(BMI, na.rm = TRUE))/sd(BMI, na.rm = TRUE),
+           bmi_cat = case_when(
+             BMI < 18.5 ~ 1,
+             BMI >= 18.5 & BMI < 25 ~ 2,
+             BMI >= 25 & BMI < 30 ~ 3,
+             TRUE ~ 4
+           ),
+           competingrisk = case_when(
+             completeI2025 == 0 & VitalStatus == 0 ~ 0,
+             completeI2025 == 1 ~ 1,
+             VitalStatus == 1 & completeI2025 == 0 ~ 2,
+             TRUE ~ 0
+           ),
+           censor = case_when(
+             competingrisk == 0 ~ 0,
+             TRUE ~ 1
+           ),
+           time = case_when(
+             competingrisk == 0 ~ YearsToStatus,
+             competingrisk == 1 ~ YearsToI2025,
+             competingrisk == 2 ~ YearsToStatus,
+             TRUE ~ YearsToStatus
+           ),
+           IMD = as.numeric(IMD))
   write_csv(final_thesis_data, paste0(output_path, "/final_thesis_data.csv", sep = ""))
   
   return(final_thesis_data)
